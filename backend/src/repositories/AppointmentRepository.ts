@@ -1,6 +1,33 @@
 import { PrismaClient, Appointment } from '@prisma/client';
 import { APPOINTMENT_STATUS } from '../constants/roles';
 
+// Helper function to combine date and time strings into DateTime
+function combineDateTime(date: Date | string, time: string): Date {
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  const [hours, minutes] = time.split(':').map(Number);
+  const combined = new Date(dateObj);
+  combined.setHours(hours, minutes, 0, 0);
+  return combined;
+}
+
+// Helper function to extract time from DateTime
+function extractTime(dateTime: Date): string {
+  return dateTime.toTimeString().slice(0, 5); // Format: "HH:mm"
+}
+
+// Helper function to extract date from DateTime
+function extractDate(dateTime: Date): Date {
+  const date = new Date(dateTime);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+// Type for backward compatibility
+type AppointmentWithDateTimeFields = Appointment & {
+  date: Date;
+  time: string;
+};
+
 export class AppointmentRepository {
   private prisma: PrismaClient;
 
@@ -25,18 +52,18 @@ export class AppointmentRepository {
     if (options?.status) whereClause.status = options.status;
 
     if (options?.date) {
-      // For exact date match
+      // For exact date match - now using appointmentDateTime
       const targetDate = new Date(options.date);
-      whereClause.date = {
+      whereClause.appointmentDateTime = {
         gte: new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate()),
         lt: new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + 1)
       };
     }
 
     if (options?.dateFrom || options?.dateTo) {
-      whereClause.date = {};
-      if (options.dateFrom) whereClause.date.gte = options.dateFrom;
-      if (options.dateTo) whereClause.date.lt = options.dateTo;
+      whereClause.appointmentDateTime = {};
+      if (options.dateFrom) whereClause.appointmentDateTime.gte = options.dateFrom;
+      if (options.dateTo) whereClause.appointmentDateTime.lt = options.dateTo;
     }
 
     const [appointments, total] = await Promise.all([
@@ -71,17 +98,24 @@ export class AppointmentRepository {
         skip: options?.skip,
         take: options?.take,
         orderBy: {
-          date: 'desc'
+          appointmentDateTime: 'desc'
         }
       }),
       this.prisma.appointment.count({ where: whereClause })
     ]);
 
-    return { appointments, total };
+    // Add backward compatibility fields
+    const appointmentsWithDateTimeFields = appointments.map(appointment => ({
+      ...appointment,
+      date: extractDate(appointment.appointmentDateTime),
+      time: extractTime(appointment.appointmentDateTime)
+    }));
+
+    return { appointments: appointmentsWithDateTimeFields, total };
   }
 
   async findById(id: string) {
-    return this.prisma.appointment.findUnique({
+    const appointment = await this.prisma.appointment.findUnique({
       where: { id },
       include: {
         patient: {
@@ -113,6 +147,15 @@ export class AppointmentRepository {
         }
       }
     });
+
+    if (!appointment) return null;
+
+    // Add backward compatibility fields
+    return {
+      ...appointment,
+      date: extractDate(appointment.appointmentDateTime),
+      time: extractTime(appointment.appointmentDateTime)
+    };
   }
 
   async findByIdBasic(id: string): Promise<Appointment | null> {
@@ -169,14 +212,14 @@ export class AppointmentRepository {
 
     // Default sort options
     let orderBy: any = {
-      date: 'desc' as const
+      appointmentDateTime: 'desc' as const
     };
 
     // Handle custom sorting
     if (options?.sortBy) {
       switch (options.sortBy) {
         case 'date':
-          orderBy = { date: options.sortOrder || 'desc' };
+          orderBy = { appointmentDateTime: options.sortOrder || 'desc' };
           break;
         case 'doctor':
           orderBy = {
@@ -198,7 +241,7 @@ export class AppointmentRepository {
           orderBy = { status: options.sortOrder || 'asc' };
           break;
         default:
-          orderBy = { date: 'desc' as const };
+          orderBy = { appointmentDateTime: 'desc' as const };
       }
     }
 
@@ -228,7 +271,14 @@ export class AppointmentRepository {
       this.prisma.appointment.count({ where: whereClause })
     ]);
 
-    return { appointments, total };
+    // Add backward compatibility fields
+    const appointmentsWithDateTimeFields = appointments.map(appointment => ({
+      ...appointment,
+      date: extractDate(appointment.appointmentDateTime),
+      time: extractTime(appointment.appointmentDateTime)
+    }));
+
+    return { appointments: appointmentsWithDateTimeFields, total };
   }
 
   async findByDoctorId(doctorId: string, options?: {
@@ -245,7 +295,7 @@ export class AppointmentRepository {
 
     if (options?.date) {
       const targetDate = new Date(options.date);
-      whereClause.date = {
+      whereClause.appointmentDateTime = {
         gte: new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate()),
         lt: new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + 1)
       };
@@ -267,13 +317,20 @@ export class AppointmentRepository {
         skip: options?.skip,
         take: options?.take,
         orderBy: {
-          date: 'desc'
+          appointmentDateTime: 'desc'
         }
       }),
       this.prisma.appointment.count({ where: whereClause })
     ]);
 
-    return { appointments, total };
+    // Add backward compatibility fields
+    const appointmentsWithDateTimeFields = appointments.map(appointment => ({
+      ...appointment,
+      date: extractDate(appointment.appointmentDateTime),
+      time: extractTime(appointment.appointmentDateTime)
+    }));
+
+    return { appointments: appointmentsWithDateTimeFields, total };
   }
 
   async create(data: {
@@ -284,10 +341,16 @@ export class AppointmentRepository {
     symptoms?: string;
     notes?: string;
     status?: string;
-  }): Promise<Appointment> {
-    return this.prisma.appointment.create({
+  }): Promise<AppointmentWithDateTimeFields> {
+    const appointmentDateTime = combineDateTime(data.date, data.time);
+    
+    const appointment = await this.prisma.appointment.create({
       data: {
-        ...data,
+        patientId: data.patientId,
+        doctorId: data.doctorId,
+        appointmentDateTime,
+        symptoms: data.symptoms,
+        notes: data.notes,
         status: data.status || APPOINTMENT_STATUS.PENDING
       },
       include: {
@@ -308,10 +371,17 @@ export class AppointmentRepository {
         }
       }
     });
+
+    // Add backward compatibility fields
+    return {
+      ...appointment,
+      date: extractDate(appointment.appointmentDateTime),
+      time: extractTime(appointment.appointmentDateTime)
+    };
   }
 
-  async update(id: string, data: Partial<Appointment>): Promise<Appointment> {
-    return this.prisma.appointment.update({
+  async update(id: string, data: Partial<Appointment>): Promise<AppointmentWithDateTimeFields> {
+    const appointment = await this.prisma.appointment.update({
       where: { id },
       data,
       include: {
@@ -332,6 +402,13 @@ export class AppointmentRepository {
         }
       }
     });
+
+    // Add backward compatibility fields
+    return {
+      ...appointment,
+      date: extractDate(appointment.appointmentDateTime),
+      time: extractTime(appointment.appointmentDateTime)
+    };
   }
 
   async delete(id: string): Promise<Appointment> {
@@ -341,10 +418,10 @@ export class AppointmentRepository {
   }
 
   async checkAvailability(doctorId: string, date: Date, time: string, excludeAppointmentId?: string): Promise<boolean> {
+    const appointmentDateTime = combineDateTime(date, time);
     const whereClause: any = {
       doctorId,
-      date,
-      time,
+      appointmentDateTime,
       status: {
         in: [APPOINTMENT_STATUS.PENDING, APPOINTMENT_STATUS.CONFIRMED]
       }
@@ -380,12 +457,12 @@ export class AppointmentRepository {
       }
     }
 
-    // Get booked slots for this date
+    // Get booked slots for this date using appointmentDateTime
     const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const bookedAppointments = await this.prisma.appointment.findMany({
       where: {
         doctorId,
-        date: {
+        appointmentDateTime: {
           gte: targetDate,
           lt: new Date(targetDate.getTime() + 24 * 60 * 60 * 1000) // Add one day
         },
@@ -393,10 +470,10 @@ export class AppointmentRepository {
           in: [APPOINTMENT_STATUS.PENDING, APPOINTMENT_STATUS.CONFIRMED]
         }
       },
-      select: { time: true }
+      select: { appointmentDateTime: true }
     });
 
-    const bookedTimes = bookedAppointments.map(apt => apt.time);
+    const bookedTimes = bookedAppointments.map(apt => extractTime(apt.appointmentDateTime));
     return timeSlots.filter(slot => !bookedTimes.includes(slot));
   }
 
@@ -408,7 +485,7 @@ export class AppointmentRepository {
     if (options?.dateFrom) dateFilter.gte = options.dateFrom;
     if (options?.dateTo) dateFilter.lt = options.dateTo;
 
-    const whereClause = Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {};
+    const whereClause = Object.keys(dateFilter).length > 0 ? { appointmentDateTime: dateFilter } : {};
 
     const [
       total,
@@ -433,7 +510,7 @@ export class AppointmentRepository {
       }),
       this.prisma.appointment.count({
         where: {
-          date: {
+          appointmentDateTime: {
             gte: new Date(new Date().setHours(0, 0, 0, 0)),
             lt: new Date(new Date().setHours(23, 59, 59, 999))
           }

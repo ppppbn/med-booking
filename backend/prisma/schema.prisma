@@ -11,57 +11,184 @@ datasource db {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  email       String   @unique
-  password    String
-  fullName    String
-  phone       String?
-  dateOfBirth DateTime?
-  address     String?
-  role        String   @default("PATIENT")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  email           String   @unique
+  password        String
+  fullName        String
+  phone           String?
+  dateOfBirth     DateTime?
+  address         String?
+  role            String   @default("PATIENT")
+  gender          String?
+  emergencyContact String?
+  emergencyPhone  String?
+  isActive        Boolean  @default(true)
+  lastLoginAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   // Relations
   patientAppointments Appointment[] @relation("PatientAppointments")
   doctor              Doctor?
+  medicalRecords      MedicalRecord[] @relation("PatientMedicalRecords")
+  notifications       Notification[]
 
   @@map("users")
 }
 
-model Doctor {
-  id            String   @id @default(cuid())
-  userId        String   @unique
-  specialization String
-  licenseNumber String   @unique
-  experience    Int?
-  bio           String?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+model Department {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String?
+  headDoctorId String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
-  user     User         @relation(fields: [userId], references: [id], onDelete: NoAction)
-  appointments Appointment[]
+  doctors Doctor[]
+  rooms   Room[]
+
+  @@map("departments")
+}
+
+model Doctor {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  departmentId          String?
+  specialization        String
+  licenseNumber         String   @unique
+  experience            Int?
+  bio                   String?
+  education             String?
+  certifications        String?
+  consultationFee       Decimal?
+  consultationDuration  Int?     @default(30) // minutes
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  user            User            @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  department      Department?     @relation(fields: [departmentId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  appointments    Appointment[]
+  schedules       DoctorSchedule[]
+  medicalRecords  MedicalRecord[] @relation("DoctorMedicalRecords")
 
   @@map("doctors")
 }
 
-model Appointment {
-  id          String   @id @default(cuid())
-  patientId   String
-  doctorId    String
-  date        DateTime
-  time        String // Format: "HH:mm"
-  status      String   @default("PENDING")
-  notes       String?
-  symptoms    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model Room {
+  id           String   @id @default(cuid())
+  departmentId String
+  roomNumber   String   @unique
+  roomType     String   // "CONSULTATION", "EXAMINATION", "PROCEDURE", "SURGERY"
+  capacity     Int      @default(1)
+  equipment    String?  // JSON string of equipment list
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
-  patient User @relation("PatientAppointments", fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  doctor  Doctor @relation(fields: [doctorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  department   Department    @relation(fields: [departmentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  appointments Appointment[]
+
+  @@map("rooms")
+}
+
+model DoctorSchedule {
+  id           String   @id @default(cuid())
+  doctorId     String
+  dayOfWeek    String   // "MONDAY", "TUESDAY", etc.
+  startTime    String   // Format: "HH:mm"
+  endTime      String   // Format: "HH:mm"
+  slotDuration Int      @default(30) // minutes
+  isActive     Boolean  @default(true)
+  validFrom    DateTime @default(now())
+  validTo      DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("doctor_schedules")
+}
+
+model Appointment {
+  id                  String   @id @default(cuid())
+  patientId           String
+  doctorId            String
+  roomId              String?
+  appointmentDateTime DateTime // Combined date and time
+  duration            Int      @default(30) // minutes
+  status              String   @default("PENDING")
+  appointmentType     String   @default("CONSULTATION") // "CONSULTATION", "FOLLOW_UP", "EMERGENCY"
+  priority            String   @default("NORMAL") // "LOW", "NORMAL", "HIGH", "URGENT"
+  symptoms            String?
+  notes               String?
+  cancellationReason  String?
+  fee                 Decimal?
+  paymentStatus       String   @default("PENDING") // "PENDING", "PAID", "CANCELLED"
+  reminderSentAt      DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relations
+  patient        User            @relation("PatientAppointments", fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  doctor         Doctor          @relation(fields: [doctorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  room           Room?           @relation(fields: [roomId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  medicalRecords MedicalRecord[]
+  notifications  Notification[]
+
+  // For backward compatibility, we'll add computed fields in the application layer
+  // date: appointmentDateTime.toDateString()
+  // time: appointmentDateTime.toTimeString()
 
   @@map("appointments")
+}
+
+model MedicalRecord {
+  id                    String   @id @default(cuid())
+  patientId             String
+  doctorId              String
+  appointmentId         String?
+  diagnosis             String?
+  treatment             String?
+  prescription          String?
+  testResults           String?
+  followUpInstructions  String?
+  nextAppointmentDate   DateTime?
+  attachments           String?  // JSON string of file paths/URLs
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  patient     User         @relation("PatientMedicalRecords", fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  doctor      Doctor       @relation("DoctorMedicalRecords", fields: [doctorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@map("medical_records")
+}
+
+model Notification {
+  id            String   @id @default(cuid())
+  userId        String
+  appointmentId String?
+  type          String   // "APPOINTMENT_REMINDER", "APPOINTMENT_CONFIRMED", "APPOINTMENT_CANCELLED", "SYSTEM"
+  title         String
+  message       String
+  channel       String   @default("IN_APP") // "EMAIL", "SMS", "PUSH", "IN_APP"
+  isRead        Boolean  @default(false)
+  scheduledAt   DateTime?
+  sentAt        DateTime?
+  status        String   @default("PENDING") // "PENDING", "SENT", "FAILED"
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@map("notifications")
 }

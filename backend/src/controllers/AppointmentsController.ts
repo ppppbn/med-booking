@@ -177,6 +177,11 @@ export class AppointmentsController {
 
       const updateData: any = {};
 
+      // Helper function to extract time from appointmentDateTime
+      const extractTime = (dateTime: Date): string => {
+        return dateTime.toTimeString().slice(0, 5); // Format: "HH:mm"
+      };
+
       // Patients can update symptoms, notes, date, time (with restrictions)
       if (isPatient) {
         if (symptoms !== undefined) updateData.symptoms = symptoms;
@@ -186,11 +191,13 @@ export class AppointmentsController {
         if ((date || time) && appointment.status === APPOINTMENT_STATUS.PENDING) {
           if (date) {
             const newDate = new Date(date);
+            const currentTime = extractTime(appointment.appointmentDateTime);
+            
             // Check if the new date/time is available
             const isAvailable = await this.appointmentRepository.checkAvailability(
               appointment.doctorId,
               newDate,
-              time || appointment.time,
+              time || currentTime,
               id
             );
 
