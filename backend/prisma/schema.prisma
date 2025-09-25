@@ -1,0 +1,67 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String
+  fullName    String
+  phone       String?
+  dateOfBirth DateTime?
+  address     String?
+  role        String   @default("PATIENT")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  patientAppointments Appointment[] @relation("PatientAppointments")
+  doctor              Doctor?
+
+  @@map("users")
+}
+
+model Doctor {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  specialization String
+  licenseNumber String   @unique
+  experience    Int?
+  bio           String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  user     User         @relation(fields: [userId], references: [id], onDelete: NoAction)
+  appointments Appointment[]
+
+  @@map("doctors")
+}
+
+model Appointment {
+  id          String   @id @default(cuid())
+  patientId   String
+  doctorId    String
+  date        DateTime
+  time        String // Format: "HH:mm"
+  status      String   @default("PENDING")
+  notes       String?
+  symptoms    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  patient User @relation("PatientAppointments", fields: [patientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  doctor  Doctor @relation(fields: [doctorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("appointments")
+}
