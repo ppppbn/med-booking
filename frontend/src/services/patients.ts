@@ -7,6 +7,7 @@ export interface Patient {
   phone: string | null;
   dateOfBirth: string | null;
   address: string | null;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -37,9 +38,14 @@ export interface MedicalRecord {
   };
   symptoms: string | null;
   notes: string | null;
-  diagnosis?: string | null;
-  prescription?: string | null;
-  followUpNotes?: string | null;
+  diagnosis: string | null;
+  treatment: string | null;
+  prescription: string | null;
+  testResults: string | null;
+  followUpInstructions: string | null;
+  nextAppointmentDate: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PatientRecordsResponse {
@@ -111,6 +117,23 @@ export const patientsService = {
 
   async deactivatePatient(id: string): Promise<{ message: string }> {
     const response = await axiosInstance.delete(`/patients/${id}`);
+    return response.data;
+  },
+
+  async togglePatientStatus(id: string): Promise<{ message: string; patient: Patient }> {
+    const response = await axiosInstance.patch(`/patients/${id}/status`);
+    return response.data;
+  },
+
+  async getPatientStatistics(): Promise<{
+    totalPatients: number;
+    activePatients: number;
+    inactivePatients: number;
+    totalAppointments: number;
+    completedAppointments: number;
+    pendingAppointments: number;
+  }> {
+    const response = await axiosInstance.get('/patients/admin/statistics');
     return response.data;
   }
 };

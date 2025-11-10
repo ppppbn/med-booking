@@ -35,4 +35,29 @@ router.get('/stats/overview', authenticateToken, authorizeRoles(USER_ROLES.ADMIN
   appointmentsController.getAppointmentStatistics(req, res)
 );
 
+// Get doctor appointment statistics (protected - doctor only)
+router.get('/stats/doctor', authenticateToken, authorizeRoles(USER_ROLES.DOCTOR), (req, res) =>
+  appointmentsController.getDoctorAppointmentStatistics(req, res)
+);
+
+// Get patient appointment statistics (protected - patient only)
+router.get('/stats/patient', authenticateToken, authorizeRoles(USER_ROLES.PATIENT), (req, res) =>
+  appointmentsController.getPatientAppointmentStatistics(req, res)
+);
+
+// Get doctor performance statistics (protected - admin only)
+router.get('/stats/doctor-performance', authenticateToken, authorizeRoles(USER_ROLES.ADMIN), (req, res) =>
+  appointmentsController.getDoctorPerformance(req, res)
+);
+
+// Get appointment trends for last 6 months (protected - admin only)
+router.get('/stats/appointment-trends', authenticateToken, authorizeRoles(USER_ROLES.ADMIN), (req, res) =>
+  appointmentsController.getAppointmentTrends(req, res)
+);
+
+// Get specialization performance statistics (protected - admin only)
+router.get('/stats/specialization-performance', authenticateToken, authorizeRoles(USER_ROLES.ADMIN), (req, res) =>
+  appointmentsController.getSpecializationPerformance(req, res)
+);
+
 export default router;

@@ -70,9 +70,8 @@ const DoctorPatients: React.FC = () => {
     try {
       setLoading(true);
 
-      // Get all appointments for this doctor
+      // Get all appointments for this doctor (backend automatically filters by authenticated user role)
       const { appointments } = await appointmentsService.getAppointments({
-        doctorId: user!.id,
         limit: 10000 // Get all to aggregate patient data
       });
 
@@ -377,9 +376,6 @@ const DoctorPatients: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPatientDialog(false)}>Đóng</Button>
-          <Button variant="contained" onClick={() => setPatientDialog(false)}>
-            Xem lịch hẹn
-          </Button>
         </DialogActions>
       </Dialog>
     </Box>

@@ -33,8 +33,13 @@ export class UserRepository {
     skip?: number;
     take?: number;
     search?: string;
+    isActive?: boolean;
   }) {
     const whereClause: any = { role };
+
+    if (options?.isActive !== undefined) {
+      whereClause.isActive = options.isActive;
+    }
 
     if (options?.search) {
       whereClause.OR = [
@@ -85,6 +90,20 @@ export class UserRepository {
     return this.prisma.user.update({
       where: { id },
       data: { role: 'DEACTIVATED_PATIENT' }
+    });
+  }
+
+  async activate(id: string): Promise<User> {
+    return this.prisma.user.update({
+      where: { id },
+      data: { isActive: true }
+    });
+  }
+
+  async deactivate(id: string): Promise<User> {
+    return this.prisma.user.update({
+      where: { id },
+      data: { isActive: false }
     });
   }
 

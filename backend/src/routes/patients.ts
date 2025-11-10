@@ -14,7 +14,7 @@ router.get('/', authenticateToken, authorizeRoles(USER_ROLES.ADMIN, USER_ROLES.D
 // Get patient by ID (protected - patient can access their own, admin/doctor can access any)
 router.get('/:id', authenticateToken, (req, res) => patientsController.getPatient(req, res));
 
-// Update patient profile (protected - patient can update their own profile)
+// Update patient profile (protected - patient can update their own profile, admin can update any profile)
 router.put('/:id', authenticateToken, (req, res) => patientsController.updatePatient(req, res));
 
 // Get patient's appointments (protected - patient can access their own)
@@ -35,6 +35,16 @@ router.post('/', authenticateToken, authorizeRoles(USER_ROLES.ADMIN), (req, res)
 // Delete patient (protected - admin only, soft delete by deactivating)
 router.delete('/:id', authenticateToken, authorizeRoles(USER_ROLES.ADMIN), (req, res) =>
   patientsController.deactivatePatient(req, res)
+);
+
+// Toggle patient status (activate/deactivate) (protected - admin only)
+router.patch('/:id/status', authenticateToken, authorizeRoles(USER_ROLES.ADMIN), (req, res) =>
+  patientsController.togglePatientStatus(req, res)
+);
+
+// Get patient statistics (protected - admin only)
+router.get('/admin/statistics', authenticateToken, authorizeRoles(USER_ROLES.ADMIN), (req, res) =>
+  patientsController.getPatientStatistics(req, res)
 );
 
 export default router;

@@ -1,20 +1,23 @@
 import { Request, Response } from 'express';
 import { AppointmentRepository } from '../repositories/AppointmentRepository';
 import { DoctorRepository } from '../repositories/DoctorRepository';
+import { MedicalRecordRepository } from '../repositories/MedicalRecordRepository';
 import { USER_ROLES, APPOINTMENT_STATUS } from '../constants/roles';
 
 export class AppointmentsController {
   private appointmentRepository: AppointmentRepository;
   private doctorRepository: DoctorRepository;
+  private medicalRecordRepository: MedicalRecordRepository;
 
   constructor() {
     this.appointmentRepository = new AppointmentRepository();
     this.doctorRepository = new DoctorRepository();
+    this.medicalRecordRepository = new MedicalRecordRepository();
   }
 
   async getAppointments(req: Request, res: Response): Promise<void> {
     try {
-      const { page = 1, limit = 10, status, date, doctorId, patientId } = req.query;
+      const { page = 1, limit = 10, status, date, startDate, endDate, doctorId, patientId } = req.query;
 
       // Role-based filtering
       const whereClause: any = {};
@@ -37,6 +40,11 @@ export class AppointmentsController {
       // Additional filters
       if (status) whereClause.status = status as string;
       if (date) whereClause.date = new Date(date as string);
+      if (startDate || endDate) {
+        whereClause.date = {};
+        if (startDate) whereClause.date.gte = new Date(startDate as string);
+        if (endDate) whereClause.date.lte = new Date(endDate as string);
+      }
       if (doctorId) whereClause.doctorId = doctorId as string;
       if (patientId) whereClause.patientId = patientId as string;
 
@@ -154,7 +162,7 @@ export class AppointmentsController {
   async updateAppointment(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const { status, symptoms, notes, date, time } = req.body;
+      const { status, symptoms, notes, date, time, diagnosis, treatment, prescription, testResults, followUpInstructions, nextAppointmentDate } = req.body;
 
       // Get the appointment to check ownership
       const appointment = await this.appointmentRepository.findByIdBasic(id);
@@ -226,6 +234,39 @@ export class AppointmentsController {
       }
 
       const updatedAppointment = await this.appointmentRepository.update(id, updateData);
+
+      // If doctor is completing the appointment and medical data is provided, create/update medical record
+      if (isDoctor && status === APPOINTMENT_STATUS.COMPLETED &&
+          (diagnosis || treatment || prescription || testResults || followUpInstructions || nextAppointmentDate)) {
+
+        const doctor = await this.doctorRepository.findByUserId(req.user!.id);
+        if (doctor) {
+          // Check if medical record already exists for this appointment
+          const existingRecord = await this.medicalRecordRepository.findByAppointmentId(id);
+
+          const medicalRecordData = {
+            diagnosis,
+            treatment,
+            prescription,
+            testResults,
+            followUpInstructions,
+            nextAppointmentDate: nextAppointmentDate ? new Date(nextAppointmentDate) : undefined
+          };
+
+          if (existingRecord) {
+            // Update existing medical record
+            await this.medicalRecordRepository.update(existingRecord.id, medicalRecordData);
+          } else {
+            // Create new medical record
+            await this.medicalRecordRepository.create({
+              patientId: appointment.patientId,
+              doctorId: doctor.id,
+              appointmentId: id,
+              ...medicalRecordData
+            });
+          }
+        }
+      }
 
       res.json({
         message: 'Appointment updated successfully',
@@ -326,6 +367,200 @@ export class AppointmentsController {
       });
     } catch (error) {
       console.error('Get appointment statistics error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  async getDoctorAppointmentStatistics(req: Request, res: Response): Promise<void> {
+    try {
+      // Only doctors can access their own statistics
+      if (req.user?.role !== USER_ROLES.DOCTOR) {
+        res.status(403).json({ error: 'Truy cập bị từ chối' });
+        return;
+      }
+
+      // Get the doctor's profile ID
+      const doctor = await this.doctorRepository.findByUserId(req.user.id);
+      if (!doctor) {
+        res.status(404).json({ error: 'Doctor profile not found' });
+        return;
+      }
+
+      const { startDate, endDate } = req.query;
+
+      const dateFilter: any = {};
+      if (startDate) dateFilter.dateFrom = new Date(startDate as string);
+      if (endDate) dateFilter.dateTo = new Date(endDate as string);
+
+      const statistics = await this.appointmentRepository.getDoctorStatistics(doctor.id, dateFilter);
+
+      res.json({
+        statistics,
+        dateRange: {
+          startDate,
+          endDate
+        }
+      });
+    } catch (error) {
+      console.error('Get doctor appointment statistics error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  async getPatientAppointmentStatistics(req: Request, res: Response): Promise<void> {
+    try {
+      // Only patients can access their own statistics
+      if (req.user?.role !== USER_ROLES.PATIENT) {
+        res.status(403).json({ error: 'Truy cập bị từ chối' });
+        return;
+      }
+
+      const { startDate, endDate } = req.query;
+
+      const dateFilter: any = {};
+      if (startDate) dateFilter.dateFrom = new Date(startDate as string);
+      if (endDate) dateFilter.dateTo = new Date(endDate as string);
+
+      const statistics = await this.appointmentRepository.getPatientStatistics(req.user.id, dateFilter);
+
+      res.json({
+        statistics,
+        dateRange: {
+          startDate,
+          endDate
+        }
+      });
+    } catch (error) {
+      console.error('Get patient appointment statistics error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  async getDoctorPerformance(req: Request, res: Response): Promise<void> {
+    try {
+      // Only admin can access doctor performance
+      if (req.user?.role !== USER_ROLES.ADMIN) {
+        res.status(403).json({ error: 'Truy cập bị từ chối' });
+        return;
+      }
+
+      const { doctors } = await this.doctorRepository.findAll();
+      const performance: any[] = [];
+
+      for (const doctor of doctors) {
+        try {
+          // Get doctor's appointments count
+          const totalAppointments = await this.appointmentRepository.countByDoctor(doctor.id);
+          const completedAppointments = await this.appointmentRepository.countByDoctor(doctor.id, APPOINTMENT_STATUS.COMPLETED);
+          const pendingAppointments = await this.appointmentRepository.countByDoctor(doctor.id, APPOINTMENT_STATUS.PENDING);
+
+          const completionRate = totalAppointments > 0 ? (completedAppointments / totalAppointments) * 100 : 0;
+
+          performance.push({
+            id: doctor.id,
+            fullName: doctor.user.fullName,
+            specialization: doctor.specialization,
+            totalAppointments,
+            completedAppointments,
+            pendingAppointments,
+            completionRate
+          });
+        } catch (error) {
+          // Skip doctors with errors
+          continue;
+        }
+      }
+
+      // Sort by completion rate descending
+      performance.sort((a, b) => b.completionRate - a.completionRate);
+
+      res.json({ performance });
+    } catch (error) {
+      console.error('Get doctor performance error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  async getAppointmentTrends(req: Request, res: Response): Promise<void> {
+    try {
+      // Only admin can access appointment trends
+      if (req.user?.role !== USER_ROLES.ADMIN) {
+        res.status(403).json({ error: 'Truy cập bị từ chối' });
+        return;
+      }
+
+      // Get appointment counts for last 6 months
+      const trends: { month: string; appointments: number }[] = [];
+
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date();
+        date.setMonth(date.getMonth() - i);
+        const year = date.getFullYear();
+        const month = date.getMonth();
+
+        // Count appointments for this month
+        const startOfMonth = new Date(year, month, 1);
+        const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
+
+        const count = await this.appointmentRepository.count({
+          dateFrom: startOfMonth,
+          dateTo: endOfMonth
+        });
+
+        const monthName = `Tháng ${month + 1}/${year}`;
+        trends.push({
+          month: monthName,
+          appointments: count
+        });
+      }
+
+      res.json({ trends });
+    } catch (error) {
+      console.error('Get appointment trends error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  async getSpecializationPerformance(req: Request, res: Response): Promise<void> {
+    try {
+      // Only admin can access specialization performance
+      if (req.user?.role !== USER_ROLES.ADMIN) {
+        res.status(403).json({ error: 'Truy cập bị từ chối' });
+        return;
+      }
+
+      // Get all doctors with their specializations
+      const { doctors } = await this.doctorRepository.findAll();
+      const specializationStats: { [key: string]: { total: number; completed: number } } = {};
+
+      // Initialize stats for each specialization
+      for (const doctor of doctors) {
+        if (!specializationStats[doctor.specialization]) {
+          specializationStats[doctor.specialization] = { total: 0, completed: 0 };
+        }
+
+        // Get appointment counts for this doctor
+        const totalAppointments = await this.appointmentRepository.countByDoctor(doctor.id);
+        const completedAppointments = await this.appointmentRepository.countByDoctor(doctor.id, APPOINTMENT_STATUS.COMPLETED);
+
+        specializationStats[doctor.specialization].total += totalAppointments;
+        specializationStats[doctor.specialization].completed += completedAppointments;
+      }
+
+      // Convert to array format for frontend
+      const performance = Object.entries(specializationStats).map(([specialization, stats]) => ({
+        specialization,
+        totalAppointments: stats.total,
+        completedAppointments: stats.completed,
+        completionRate: stats.total > 0 ? (stats.completed / stats.total) * 100 : 0
+      }));
+
+      // Sort by completion rate descending
+      performance.sort((a, b) => b.completionRate - a.completionRate);
+
+      res.json({ performance });
+    } catch (error) {
+      console.error('Get specialization performance error:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

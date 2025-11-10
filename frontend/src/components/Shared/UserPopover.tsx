@@ -66,7 +66,8 @@ const UserPopover: React.FC<UserPopoverProps> = ({ isCollapsed }) => {
     }
   };
 
-  const getInitials = (fullName: string) => {
+  const getInitials = (fullName: string | undefined) => {
+    if (!fullName) return '?';
     return fullName
       .split(' ')
       .map(name => name.charAt(0))

@@ -1,26 +1,39 @@
 import { Request, Response } from 'express';
 import { UserRepository } from '../repositories/UserRepository';
 import { AppointmentRepository } from '../repositories/AppointmentRepository';
+import { MedicalRecordRepository } from '../repositories/MedicalRecordRepository';
 import { USER_ROLES, APPOINTMENT_STATUS } from '../constants/roles';
 
 export class PatientsController {
   private userRepository: UserRepository;
   private appointmentRepository: AppointmentRepository;
+  private medicalRecordRepository: MedicalRecordRepository;
 
   constructor() {
     this.userRepository = new UserRepository();
     this.appointmentRepository = new AppointmentRepository();
+    this.medicalRecordRepository = new MedicalRecordRepository();
   }
 
   async getPatients(req: Request, res: Response): Promise<void> {
     try {
       const { search, page = 1, limit = 10 } = req.query;
 
-      const { users, total } = await this.userRepository.findByRole(USER_ROLES.PATIENT, {
+      // For admin users, show all patients
+      // For doctors, only show active patients
+      const isAdmin = req.user?.role === USER_ROLES.ADMIN;
+      const options: any = {
         skip: (Number(page) - 1) * Number(limit),
         take: Number(limit),
         search: search as string
-      });
+      };
+
+      // Only add isActive filter for non-admin users
+      if (!isAdmin) {
+        options.isActive = true;
+      }
+
+      const { users, total } = await this.userRepository.findByRole(USER_ROLES.PATIENT, options);
 
       res.json({
         patients: users,
@@ -46,14 +59,14 @@ export class PatientsController {
       const isAccessingOwnProfile = req.user?.id === id;
 
       if (!isAdminOrDoctor && !isAccessingOwnProfile) {
-        res.status(403).json({ error: 'Access denied' });
+        res.status(403).json({ error: 'Truy cập bị từ chối' });
         return;
       }
 
       const patient = await this.userRepository.findById(id);
 
       if (!patient || patient.role !== USER_ROLES.PATIENT) {
-        res.status(404).json({ error: 'Patient not found' });
+        res.status(404).json({ error: 'Không tìm thấy bệnh nhân' });
         return;
       }
 
@@ -69,9 +82,13 @@ export class PatientsController {
       const { id } = req.params;
       const { fullName, phone, dateOfBirth, address } = req.body;
 
-      // Verify the patient is updating their own profile
-      if (req.user?.id !== id) {
-        res.status(403).json({ error: 'Access denied' });
+      // Check if user has permission to update this patient profile
+      // Patients can update their own profile, admins can update any profile
+      const isAdmin = req.user?.role === USER_ROLES.ADMIN;
+      const isUpdatingOwnProfile = req.user?.id === id;
+
+      if (!isAdmin && !isUpdatingOwnProfile) {
+        res.status(403).json({ error: 'Truy cập bị từ chối' });
         return;
       }
 
@@ -107,7 +124,7 @@ export class PatientsController {
 
       // Verify the patient is accessing their own appointments
       if (req.user?.id !== id) {
-        res.status(403).json({ error: 'Access denied' });
+        res.status(403).json({ error: 'Truy cập bị từ chối' });
         return;
       }
 
@@ -141,34 +158,55 @@ export class PatientsController {
 
       // Verify the patient is accessing their own records
       if (req.user?.id !== id) {
-        res.status(403).json({ error: 'Access denied' });
+        res.status(403).json({ error: 'Truy cập bị từ chối' });
         return;
       }
 
-      const { appointments } = await this.appointmentRepository.findByPatientId(id, {
-        status: APPOINTMENT_STATUS.COMPLETED
+      // Get medical records for the patient
+      const medicalRecords = await this.medicalRecordRepository.findByPatientId(id);
+
+      // Transform the data to match the expected frontend format
+      const formattedRecords = medicalRecords.map(record => {
+        // Extract date and time from appointmentDateTime if appointment exists
+        let date = new Date(record.createdAt).toISOString().split('T')[0];
+        let time = '00:00';
+
+        if (record.appointment?.appointmentDateTime) {
+          const appointmentDate = new Date(record.appointment.appointmentDateTime);
+          date = appointmentDate.toISOString().split('T')[0];
+          time = appointmentDate.toTimeString().slice(0, 5);
+        }
+
+        return {
+          id: record.id,
+          date,
+          time,
+          doctor: {
+            id: record.doctor.id,
+            specialization: record.doctor.specialization,
+            licenseNumber: record.doctor.licenseNumber,
+            experience: record.doctor.experience,
+            bio: record.doctor.bio,
+            user: {
+              fullName: record.doctor.user.fullName
+            }
+          },
+          symptoms: record.appointment?.symptoms || null,
+          notes: record.appointment?.notes || null,
+          diagnosis: record.diagnosis,
+          treatment: record.treatment,
+          prescription: record.prescription,
+          testResults: record.testResults,
+          followUpInstructions: record.followUpInstructions,
+          nextAppointmentDate: record.nextAppointmentDate?.toISOString().split('T')[0] || null,
+          createdAt: record.createdAt.toISOString(),
+          updatedAt: record.updatedAt.toISOString()
+        };
       });
 
-      const medicalRecords = appointments.map(apt => ({
-        id: apt.id,
-        date: apt.date,
-        time: apt.time,
-        doctor: {
-          fullName: apt.doctor.user.fullName,
-          specialization: apt.doctor.specialization
-        },
-        symptoms: apt.symptoms,
-        notes: apt.notes,
-        // In a real application, you might have a separate MedicalRecord model
-        // with diagnosis, prescription, etc.
-        diagnosis: null, // Placeholder
-        prescription: null, // Placeholder
-        followUpNotes: null // Placeholder
-      }));
-
       res.json({
-        medicalRecords,
-        totalRecords: medicalRecords.length
+        medicalRecords: formattedRecords,
+        totalRecords: formattedRecords.length
       });
     } catch (error) {
       console.error('Get patient records error:', error);
@@ -183,7 +221,7 @@ export class PatientsController {
       // Validate required fields
       if (!email || !password || !fullName) {
         res.status(400).json({
-          error: 'Email, password, and fullName are required'
+          error: 'Email, mật khẩu và họ tên là bắt buộc'
         });
         return;
       }
@@ -191,7 +229,7 @@ export class PatientsController {
       // Check if user with this email already exists
       const existingUser = await this.userRepository.findByEmail(email);
       if (existingUser) {
-        res.status(409).json({ error: 'User with this email already exists' });
+        res.status(409).json({ error: 'Email này đã được sử dụng' });
         return;
       }
 
@@ -227,7 +265,7 @@ export class PatientsController {
 
       if (hasActiveAppointments) {
         res.status(409).json({
-          error: 'Cannot delete patient with active appointments. Cancel all appointments first.'
+          error: 'Không thể xóa bệnh nhân có lịch hẹn đang hoạt động. Hãy hủy tất cả lịch hẹn trước.'
         });
         return;
       }
@@ -237,6 +275,77 @@ export class PatientsController {
       res.json({ message: 'Patient deactivated successfully' });
     } catch (error) {
       console.error('Deactivate patient error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  async togglePatientStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+
+      // Only admin can toggle patient status
+      if (req.user?.role !== USER_ROLES.ADMIN) {
+        res.status(403).json({ error: 'Truy cập bị từ chối' });
+        return;
+      }
+
+      const patient = await this.userRepository.findById(id);
+
+      if (!patient || patient.role !== USER_ROLES.PATIENT) {
+        res.status(404).json({ error: 'Không tìm thấy bệnh nhân' });
+        return;
+      }
+
+      if (patient.isActive) {
+        // Check if patient has active appointments before deactivating
+        const hasActiveAppointments = await this.appointmentRepository.hasActiveAppointments(id);
+        if (hasActiveAppointments) {
+          res.status(409).json({
+            error: 'Không thể vô hiệu hóa bệnh nhân có lịch hẹn đang hoạt động. Hãy hủy tất cả lịch hẹn trước.'
+          });
+          return;
+        }
+      }
+
+      const updatedPatient = patient.isActive
+        ? await this.userRepository.deactivate(id)
+        : await this.userRepository.activate(id);
+
+      res.json({
+        message: `Patient ${updatedPatient.isActive ? 'activated' : 'deactivated'} successfully`,
+        patient: updatedPatient
+      });
+    } catch (error) {
+      console.error('Toggle patient status error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  async getPatientStatistics(req: Request, res: Response): Promise<void> {
+    try {
+      // Only admin can access statistics
+      if (req.user?.role !== USER_ROLES.ADMIN) {
+        res.status(403).json({ error: 'Truy cập bị từ chối' });
+        return;
+      }
+
+      const { users: allPatients } = await this.userRepository.findByRole(USER_ROLES.PATIENT);
+      const activePatients = allPatients.filter(p => p.isActive);
+      const inactivePatients = allPatients.filter(p => !p.isActive);
+
+      // Get appointment statistics
+      const appointmentStats = await this.appointmentRepository.getStatistics();
+
+      res.json({
+        totalPatients: allPatients.length,
+        activePatients: activePatients.length,
+        inactivePatients: inactivePatients.length,
+        totalAppointments: appointmentStats.total,
+        completedAppointments: appointmentStats.completed,
+        pendingAppointments: appointmentStats.pending
+      });
+    } catch (error) {
+      console.error('Get patient statistics error:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

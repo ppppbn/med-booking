@@ -60,6 +60,7 @@ export const doctorsService = {
     licenseNumber?: string;
     experience?: number;
     bio?: string;
+    fullName?: string;
   }): Promise<{ message: string; doctor: Partial<Doctor> }> {
     const response = await axiosInstance.put(`/doctors/${doctorId}`, data);
     return response.data;
@@ -79,7 +80,7 @@ export const doctorsService = {
     return response.data;
   },
 
-  async deactivateDoctor(doctorId: string): Promise<{ message: string }> {
+  async deactivateDoctor(doctorId: string): Promise<{ message: string; isActive: boolean }> {
     const response = await axiosInstance.delete(`/doctors/${doctorId}`);
     return response.data;
   }

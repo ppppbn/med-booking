@@ -23,6 +23,7 @@ import {
   Menu as MenuIcon,
   ChevronLeft as ChevronLeftIcon,
   LocalHospital as HospitalIcon,
+  Schedule as ScheduleIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { USER_ROLES } from '../../constants/roles';
@@ -50,6 +51,7 @@ const sidebarGroups: SidebarGroup[] = [
       { label: 'Bảng điều khiển', path: '/dashboard', icon: <DashboardIcon /> },
       { label: 'Quản lý bác sĩ', path: '/manage-doctors', icon: <MedicalIcon /> },
       { label: 'Quản lý bệnh nhân', path: '/manage-patients', icon: <PeopleIcon /> },
+      { label: 'Quản lý lịch hẹn', path: '/manage-appointments', icon: <EventIcon /> },
       { label: 'Thống kê', path: '/statistics', icon: <AnalyticsIcon /> },
     ],
   },
@@ -60,6 +62,7 @@ const sidebarGroups: SidebarGroup[] = [
       { label: 'Bảng điều khiển', path: '/dashboard', icon: <DashboardIcon /> },
       { label: 'Lịch hẹn', path: '/appointments', icon: <EventIcon /> },
       { label: 'Danh sách bệnh nhân', path: '/patients', icon: <PeopleIcon /> },
+      { label: 'Lịch trình làm việc', path: '/schedule', icon: <ScheduleIcon /> },
     ],
   },
   {

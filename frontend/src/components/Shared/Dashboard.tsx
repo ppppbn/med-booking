@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -27,6 +27,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { USER_ROLES } from '../../constants/roles';
+import { appointmentsService } from '../../services/appointments';
 
 interface DashboardCard {
   title: string;
@@ -39,6 +40,52 @@ interface DashboardCard {
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  const [appointmentStats, setAppointmentStats] = useState({
+    total: 0,
+    completed: 0,
+    pending: 0,
+  });
+
+  useEffect(() => {
+    fetchAppointmentStatistics();
+  }, []);
+
+  const fetchAppointmentStatistics = async () => {
+    try {
+      let response;
+
+      // Use role-specific statistics endpoints
+      switch (user?.role) {
+        case USER_ROLES.ADMIN:
+          response = await appointmentsService.getAppointmentStatistics();
+          break;
+        case USER_ROLES.DOCTOR:
+          response = await appointmentsService.getDoctorAppointmentStatistics();
+          break;
+        case USER_ROLES.PATIENT:
+          response = await appointmentsService.getPatientAppointmentStatistics();
+          break;
+        default:
+          // No statistics for unknown roles
+          setAppointmentStats({
+            total: 0,
+            completed: 0,
+            pending: 0,
+          });
+          return;
+      }
+
+      setAppointmentStats({
+        total: response.statistics.total,
+        completed: response.statistics.completed,
+        pending: response.statistics.pending,
+      });
+    } catch (error) {
+      console.error('Failed to fetch appointment statistics:', error);
+      // Keep default values (0) on error
+    }
+  };
 
   const getRoleLabel = (role: string) => {
     switch (role) {
@@ -53,7 +100,8 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const getInitials = (fullName: string) => {
+  const getInitials = (fullName: string | undefined) => {
+    if (!fullName) return '?';
     return fullName
       .split(' ')
       .map(name => name.charAt(0))
@@ -361,7 +409,7 @@ const Dashboard: React.FC = () => {
                 Tổng lịch hẹn
               </Typography>
               <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                --
+                {appointmentStats.total}
               </Typography>
             </Box>
           </Paper>
@@ -381,7 +429,7 @@ const Dashboard: React.FC = () => {
                 Đã hoàn thành
               </Typography>
               <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                --
+                {appointmentStats.completed}
               </Typography>
             </Box>
           </Paper>
@@ -401,7 +449,7 @@ const Dashboard: React.FC = () => {
                 Đang chờ
               </Typography>
               <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                --
+                {appointmentStats.pending}
               </Typography>
             </Box>
           </Paper>

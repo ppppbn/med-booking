@@ -3,6 +3,7 @@ import { DoctorRepository } from '../repositories/DoctorRepository';
 import { UserRepository } from '../repositories/UserRepository';
 import { AppointmentRepository } from '../repositories/AppointmentRepository';
 import { USER_ROLES } from '../constants/roles';
+import { getDepartmentIdFromSpecialization } from '../constants/departments';
 
 export class DoctorsController {
   private doctorRepository: DoctorRepository;
@@ -19,11 +20,21 @@ export class DoctorsController {
     try {
       const { specialization } = req.query;
 
-      const { doctors, total } = await this.doctorRepository.findAll({
-        isActive: true,
+      // For admin users, show all doctors (active and inactive)
+      // For regular users, only show active doctors
+      const isAdmin = req.user?.role === USER_ROLES.ADMIN;
+      const options: any = {
         specialization: specialization as string
-      });
+      };
 
+      // Only add isActive filter for non-admin users
+      if (!isAdmin) {
+        options.isActive = true;
+      }
+
+      const { doctors, total } = await this.doctorRepository.findAll(options);
+
+      // Get specializations from departments (available to all users)
       const specializations = await this.doctorRepository.getSpecializations();
 
       res.json({
@@ -163,21 +174,47 @@ export class DoctorsController {
 
   async updateDoctorProfile(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
-      const { specialization, licenseNumber, experience, bio } = req.body;
+      const { id } = req.params; // This is the doctor profile ID
+      const { specialization, licenseNumber, experience, bio, fullName } = req.body;
 
-      // Verify the doctor is updating their own profile
-      if (req.user?.id !== id) {
+      // First, get the doctor to check ownership
+      const doctor = await this.doctorRepository.findById(id);
+      if (!doctor) {
+        res.status(404).json({ error: 'Doctor not found' });
+        return;
+      }
+
+      // Allow doctors to update their own profile, or admins to update any profile
+      const isDoctorUpdatingOwnProfile = req.user?.role === USER_ROLES.DOCTOR && req.user?.id === doctor.userId;
+      const isAdmin = req.user?.role === USER_ROLES.ADMIN;
+
+      if (!isDoctorUpdatingOwnProfile && !isAdmin) {
         res.status(403).json({ error: 'Access denied' });
         return;
       }
 
-      const updatedDoctor = await this.doctorRepository.updateByUserId(id, {
+      // Update doctor profile
+      const updateData: any = {
         specialization,
         licenseNumber,
         experience,
         bio
-      });
+      };
+
+      // If specialization is being changed, update departmentId accordingly
+      if (specialization && specialization !== doctor.specialization) {
+        const newDepartmentId = getDepartmentIdFromSpecialization(specialization);
+        if (newDepartmentId) {
+          updateData.departmentId = newDepartmentId;
+        }
+      }
+
+      const updatedDoctor = await this.doctorRepository.update(id, updateData);
+
+      // If fullName is provided and user is admin, update the user record as well
+      if (fullName && isAdmin) {
+        await this.userRepository.update(doctor.userId, { fullName });
+      }
 
       res.json({
         message: 'Doctor profile updated successfully',
@@ -186,7 +223,8 @@ export class DoctorsController {
           specialization: updatedDoctor.specialization,
           licenseNumber: updatedDoctor.licenseNumber,
           experience: updatedDoctor.experience,
-          bio: updatedDoctor.bio
+          bio: updatedDoctor.bio,
+          fullName: isAdmin && fullName ? fullName : updatedDoctor.user.fullName
         }
       });
     } catch (error) {
@@ -225,8 +263,11 @@ export class DoctorsController {
         role: USER_ROLES.DOCTOR
       });
 
+      const departmentId = getDepartmentIdFromSpecialization(specialization);
+
       const doctor = await this.doctorRepository.create({
         userId: user.id,
+        ...(departmentId && { departmentId }), // Only include if departmentId exists
         specialization,
         licenseNumber,
         experience,
@@ -253,15 +294,30 @@ export class DoctorsController {
     }
   }
 
-  async deactivateDoctor(req: Request, res: Response): Promise<void> {
+  async toggleDoctorStatus(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
+      const { id } = req.params; // This is the doctor profile ID
 
-      await this.doctorRepository.deactivate(id);
+      // Only admins can toggle doctor status
+      if (req.user?.role !== USER_ROLES.ADMIN) {
+        res.status(403).json({ error: 'Access denied. Only admins can change doctor status.' });
+        return;
+      }
 
-      res.json({ message: 'Doctor deactivated successfully' });
+      // Check current status
+      const isCurrentlyActive = await this.doctorRepository.isActive(id);
+
+      if (isCurrentlyActive) {
+        // Deactivate the doctor
+        await this.doctorRepository.deactivate(id);
+        res.json({ message: 'Doctor deactivated successfully', isActive: false });
+      } else {
+        // Activate the doctor
+        await this.doctorRepository.activate(id);
+        res.json({ message: 'Doctor activated successfully', isActive: true });
+      }
     } catch (error) {
-      console.error('Deactivate doctor error:', error);
+      console.error('Toggle doctor status error:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

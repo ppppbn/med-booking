@@ -188,7 +188,9 @@ const MyRecords: React.FC = () => {
                     <TableCell>Chuyên khoa</TableCell>
                     <TableCell>Triệu chứng</TableCell>
                     <TableCell>Chẩn đoán</TableCell>
+                    <TableCell>Điều trị</TableCell>
                     <TableCell>Đơn thuốc</TableCell>
+                    <TableCell>Kết quả xét nghiệm</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -210,7 +212,17 @@ const MyRecords: React.FC = () => {
                       </TableCell>
                       <TableCell sx={{ maxWidth: 200 }}>
                         <Typography variant="body2" noWrap>
+                          {record.treatment || 'Chưa có'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ maxWidth: 200 }}>
+                        <Typography variant="body2" noWrap>
                           {record.prescription || 'Không có'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ maxWidth: 200 }}>
+                        <Typography variant="body2" noWrap>
+                          {record.testResults || 'Không có'}
                         </Typography>
                       </TableCell>
                     </TableRow>

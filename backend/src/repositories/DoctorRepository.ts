@@ -99,18 +99,21 @@ export class DoctorRepository {
     });
   }
 
-  async getSpecializations(): Promise<string[]> {
-    const result = await this.prisma.doctor.findMany({
-      where: { isActive: true },
-      select: { specialization: true },
-      distinct: ['specialization']
+  async getSpecializations(includeInactive = false): Promise<string[]> {
+    // Get specializations from departments instead of doctors
+    // This ensures all specializations are available even if no doctors have them
+    const departments = await this.prisma.department.findMany({
+      where: includeInactive ? {} : { isActive: true },
+      select: { name: true },
+      orderBy: { name: 'asc' }
     });
 
-    return result.map(r => r.specialization).filter(Boolean) as string[];
+    return departments.map(dept => dept.name);
   }
 
   async create(data: {
     userId: string;
+    departmentId?: string;
     specialization: string;
     licenseNumber: string;
     experience?: number;
@@ -124,10 +127,19 @@ export class DoctorRepository {
     });
   }
 
-  async update(id: string, data: Partial<Doctor>): Promise<Doctor> {
+  async update(id: string, data: Partial<Doctor>) {
     return this.prisma.doctor.update({
       where: { id },
-      data
+      data,
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true
+          }
+        }
+      }
     });
   }
 
@@ -146,10 +158,35 @@ export class DoctorRepository {
     });
   }
 
-  async deactivate(id: string): Promise<Doctor> {
+  async deactivate(id: string) {
     return this.prisma.doctor.update({
       where: { id },
-      data: { isActive: false }
+      data: { isActive: false },
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true
+          }
+        }
+      }
+    });
+  }
+
+  async activate(id: string) {
+    return this.prisma.doctor.update({
+      where: { id },
+      data: { isActive: true },
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true
+          }
+        }
+      }
     });
   }
 

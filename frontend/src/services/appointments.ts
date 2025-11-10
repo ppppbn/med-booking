@@ -63,6 +63,8 @@ export const appointmentsService = {
     limit?: number;
     status?: string;
     date?: string;
+    startDate?: string;
+    endDate?: string;
     doctorId?: string;
     patientId?: string;
   }): Promise<AppointmentListResponse> {
@@ -112,6 +114,71 @@ export const appointmentsService = {
     };
   }> {
     const response = await axiosInstance.get('/appointments/stats/overview', { params });
+    return response.data;
+  },
+
+  async getDoctorAppointmentStatistics(params?: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
+    statistics: AppointmentStatistics;
+    dateRange?: {
+      startDate: string;
+      endDate: string;
+    };
+  }> {
+    const response = await axiosInstance.get('/appointments/stats/doctor', { params });
+    return response.data;
+  },
+
+  async getPatientAppointmentStatistics(params?: {
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{
+    statistics: AppointmentStatistics;
+    dateRange?: {
+      startDate: string;
+      endDate: string;
+    };
+  }> {
+    const response = await axiosInstance.get('/appointments/stats/patient', { params });
+    return response.data;
+  },
+
+  async getDoctorPerformance(): Promise<{
+    performance: {
+      id: string;
+      fullName: string;
+      specialization: string;
+      totalAppointments: number;
+      completedAppointments: number;
+      pendingAppointments: number;
+      completionRate: number;
+    }[];
+  }> {
+    const response = await axiosInstance.get('/appointments/stats/doctor-performance');
+    return response.data;
+  },
+
+  async getAppointmentTrends(): Promise<{
+    trends: {
+      month: string;
+      appointments: number;
+    }[];
+  }> {
+    const response = await axiosInstance.get('/appointments/stats/appointment-trends');
+    return response.data;
+  },
+
+  async getSpecializationPerformance(): Promise<{
+    performance: {
+      specialization: string;
+      totalAppointments: number;
+      completedAppointments: number;
+      completionRate: number;
+    }[];
+  }> {
+    const response = await axiosInstance.get('/appointments/stats/specialization-performance');
     return response.data;
   }
 };

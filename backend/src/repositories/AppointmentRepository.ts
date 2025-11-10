@@ -26,6 +26,14 @@ function extractDate(dateTime: Date): Date {
 type AppointmentWithDateTimeFields = Appointment & {
   date: Date;
   time: string;
+  doctor?: {
+    id: string;
+    specialization: string;
+    licenseNumber: string | null;
+    experience: number | null;
+    bio: string | null;
+    fullName: string;
+  };
 };
 
 export class AppointmentRepository {
@@ -104,11 +112,15 @@ export class AppointmentRepository {
       this.prisma.appointment.count({ where: whereClause })
     ]);
 
-    // Add backward compatibility fields
+    // Add backward compatibility fields and flatten doctor data
     const appointmentsWithDateTimeFields = appointments.map(appointment => ({
       ...appointment,
       date: extractDate(appointment.appointmentDateTime),
-      time: extractTime(appointment.appointmentDateTime)
+      time: extractTime(appointment.appointmentDateTime),
+      doctor: {
+        ...appointment.doctor,
+        fullName: appointment.doctor.user.fullName
+      }
     }));
 
     return { appointments: appointmentsWithDateTimeFields, total };
@@ -150,11 +162,15 @@ export class AppointmentRepository {
 
     if (!appointment) return null;
 
-    // Add backward compatibility fields
+    // Add backward compatibility fields and flatten doctor data
     return {
       ...appointment,
       date: extractDate(appointment.appointmentDateTime),
-      time: extractTime(appointment.appointmentDateTime)
+      time: extractTime(appointment.appointmentDateTime),
+      doctor: {
+        ...appointment.doctor,
+        fullName: appointment.doctor.user.fullName
+      }
     };
   }
 
@@ -262,6 +278,14 @@ export class AppointmentRepository {
                 }
               }
             }
+          },
+          patient: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              phone: true
+            }
           }
         },
         skip: options?.skip,
@@ -271,11 +295,21 @@ export class AppointmentRepository {
       this.prisma.appointment.count({ where: whereClause })
     ]);
 
-    // Add backward compatibility fields
+    // Add backward compatibility fields and flatten doctor data
     const appointmentsWithDateTimeFields = appointments.map(appointment => ({
       ...appointment,
       date: extractDate(appointment.appointmentDateTime),
-      time: extractTime(appointment.appointmentDateTime)
+      time: extractTime(appointment.appointmentDateTime),
+      doctor: {
+        ...(appointment as any).doctor,
+        fullName: (appointment as any).doctor.user.fullName
+      },
+      patient: {
+        ...(appointment as any).patient,
+        fullName: (appointment as any).patient.fullName,
+        email: (appointment as any).patient.email,
+        phone: (appointment as any).patient.phone
+      }
     }));
 
     return { appointments: appointmentsWithDateTimeFields, total };
@@ -372,11 +406,15 @@ export class AppointmentRepository {
       }
     });
 
-    // Add backward compatibility fields
+    // Add backward compatibility fields and flatten doctor data
     return {
       ...appointment,
       date: extractDate(appointment.appointmentDateTime),
-      time: extractTime(appointment.appointmentDateTime)
+      time: extractTime(appointment.appointmentDateTime),
+      doctor: {
+        ...appointment.doctor,
+        fullName: appointment.doctor.user.fullName
+      }
     };
   }
 
@@ -403,11 +441,15 @@ export class AppointmentRepository {
       }
     });
 
-    // Add backward compatibility fields
+    // Add backward compatibility fields and flatten doctor data
     return {
       ...appointment,
       date: extractDate(appointment.appointmentDateTime),
-      time: extractTime(appointment.appointmentDateTime)
+      time: extractTime(appointment.appointmentDateTime),
+      doctor: {
+        ...appointment.doctor,
+        fullName: appointment.doctor.user.fullName
+      }
     };
   }
 
@@ -528,6 +570,116 @@ export class AppointmentRepository {
     };
   }
 
+  async getDoctorStatistics(doctorId: string, options?: {
+    dateFrom?: Date;
+    dateTo?: Date;
+  }) {
+    const dateFilter: any = {};
+    if (options?.dateFrom) dateFilter.gte = options.dateFrom;
+    if (options?.dateTo) dateFilter.lt = options.dateTo;
+
+    const baseWhereClause = { doctorId };
+    const whereClause = Object.keys(dateFilter).length > 0
+      ? { ...baseWhereClause, appointmentDateTime: dateFilter }
+      : baseWhereClause;
+
+    const [
+      total,
+      pending,
+      confirmed,
+      completed,
+      cancelled,
+      today
+    ] = await Promise.all([
+      this.prisma.appointment.count({ where: baseWhereClause }),
+      this.prisma.appointment.count({
+        where: { ...baseWhereClause, status: APPOINTMENT_STATUS.PENDING }
+      }),
+      this.prisma.appointment.count({
+        where: { ...baseWhereClause, status: APPOINTMENT_STATUS.CONFIRMED }
+      }),
+      this.prisma.appointment.count({
+        where: { ...baseWhereClause, status: APPOINTMENT_STATUS.COMPLETED }
+      }),
+      this.prisma.appointment.count({
+        where: { ...baseWhereClause, status: APPOINTMENT_STATUS.CANCELLED }
+      }),
+      this.prisma.appointment.count({
+        where: {
+          ...baseWhereClause,
+          appointmentDateTime: {
+            gte: new Date(new Date().setHours(0, 0, 0, 0)),
+            lt: new Date(new Date().setHours(23, 59, 59, 999))
+          }
+        }
+      })
+    ]);
+
+    return {
+      total,
+      pending,
+      confirmed,
+      completed,
+      cancelled,
+      today
+    };
+  }
+
+  async getPatientStatistics(patientId: string, options?: {
+    dateFrom?: Date;
+    dateTo?: Date;
+  }) {
+    const dateFilter: any = {};
+    if (options?.dateFrom) dateFilter.gte = options.dateFrom;
+    if (options?.dateTo) dateFilter.lt = options.dateTo;
+
+    const baseWhereClause = { patientId };
+    const whereClause = Object.keys(dateFilter).length > 0
+      ? { ...baseWhereClause, appointmentDateTime: dateFilter }
+      : baseWhereClause;
+
+    const [
+      total,
+      pending,
+      confirmed,
+      completed,
+      cancelled,
+      today
+    ] = await Promise.all([
+      this.prisma.appointment.count({ where: baseWhereClause }),
+      this.prisma.appointment.count({
+        where: { ...baseWhereClause, status: APPOINTMENT_STATUS.PENDING }
+      }),
+      this.prisma.appointment.count({
+        where: { ...baseWhereClause, status: APPOINTMENT_STATUS.CONFIRMED }
+      }),
+      this.prisma.appointment.count({
+        where: { ...baseWhereClause, status: APPOINTMENT_STATUS.COMPLETED }
+      }),
+      this.prisma.appointment.count({
+        where: { ...baseWhereClause, status: APPOINTMENT_STATUS.CANCELLED }
+      }),
+      this.prisma.appointment.count({
+        where: {
+          ...baseWhereClause,
+          appointmentDateTime: {
+            gte: new Date(new Date().setHours(0, 0, 0, 0)),
+            lt: new Date(new Date().setHours(23, 59, 59, 999))
+          }
+        }
+      })
+    ]);
+
+    return {
+      total,
+      pending,
+      confirmed,
+      completed,
+      cancelled,
+      today
+    };
+  }
+
   async exists(id: string): Promise<boolean> {
     const count = await this.prisma.appointment.count({
       where: { id }
@@ -558,5 +710,34 @@ export class AppointmentRepository {
     });
 
     return count > 0;
+  }
+
+  async countByDoctor(doctorId: string, status?: string): Promise<number> {
+    const whereClause: any = { doctorId };
+    if (status) whereClause.status = status;
+
+    return this.prisma.appointment.count({ where: whereClause });
+  }
+
+  async count(options?: {
+    dateFrom?: Date;
+    dateTo?: Date;
+    status?: string;
+    doctorId?: string;
+    patientId?: string;
+  }): Promise<number> {
+    const whereClause: any = {};
+
+    if (options?.status) whereClause.status = options.status;
+    if (options?.doctorId) whereClause.doctorId = options.doctorId;
+    if (options?.patientId) whereClause.patientId = options.patientId;
+
+    if (options?.dateFrom || options?.dateTo) {
+      whereClause.appointmentDateTime = {};
+      if (options.dateFrom) whereClause.appointmentDateTime.gte = options.dateFrom;
+      if (options.dateTo) whereClause.appointmentDateTime.lt = options.dateTo;
+    }
+
+    return this.prisma.appointment.count({ where: whereClause });
   }
 }

@@ -14,6 +14,11 @@ import DoctorDashboard from './components/Doctor/DoctorDashboard';
 import DoctorAppointments from './components/Doctor/Appointments';
 import DoctorPatients from './components/Doctor/Patients';
 import PatientDashboard from './components/Patient/PatientDashboard';
+import ManageDoctors from './components/Admin/ManageDoctors';
+import ManagePatients from './components/Admin/ManagePatients';
+import ManageAppointments from './components/Admin/ManageAppointments';
+import Statistics from './components/Admin/Statistics';
+import DoctorSchedule from './components/Doctor/DoctorSchedule';
 import BookAppointment from './components/Patient/BookAppointment';
 import MyAppointments from './components/Patient/MyAppointments';
 import MyRecords from './components/Patient/MyRecords';
@@ -122,6 +127,14 @@ const AppRoutes: React.FC = () => {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/schedule"
+          element={
+            <ProtectedRoute allowedRoles={USER_ROLES.DOCTOR}>
+              <DoctorSchedule />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Patient routes */}
         <Route
@@ -173,10 +186,7 @@ const AppRoutes: React.FC = () => {
           path="/manage-doctors"
           element={
             <ProtectedRoute allowedRoles={USER_ROLES.ADMIN}>
-              <div className="p-6">
-                <h2 className="text-2xl font-bold mb-4">Quản lý bác sĩ</h2>
-                <p className="text-gray-600">Chức năng quản lý tài khoản bác sĩ.</p>
-              </div>
+              <ManageDoctors />
             </ProtectedRoute>
           }
         />
@@ -184,10 +194,15 @@ const AppRoutes: React.FC = () => {
           path="/manage-patients"
           element={
             <ProtectedRoute allowedRoles={USER_ROLES.ADMIN}>
-              <div className="p-6">
-                <h2 className="text-2xl font-bold mb-4">Quản lý bệnh nhân</h2>
-                <p className="text-gray-600">Chức năng quản lý tài khoản bệnh nhân.</p>
-              </div>
+              <ManagePatients />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/manage-appointments"
+          element={
+            <ProtectedRoute allowedRoles={USER_ROLES.ADMIN}>
+              <ManageAppointments />
             </ProtectedRoute>
           }
         />
@@ -195,10 +210,7 @@ const AppRoutes: React.FC = () => {
           path="/statistics"
           element={
             <ProtectedRoute allowedRoles={USER_ROLES.ADMIN}>
-              <div className="p-6">
-                <h2 className="text-2xl font-bold mb-4">Thống kê hệ thống</h2>
-                <p className="text-gray-600">Chức năng xem báo cáo và thống kê.</p>
-              </div>
+              <Statistics />
             </ProtectedRoute>
           }
         />

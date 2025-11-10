@@ -52,20 +52,22 @@ const DoctorDashboard: React.FC = () => {
     try {
       setLoading(true);
 
+      // Get doctor's appointment statistics from API
+      const { statistics } = await appointmentsService.getDoctorAppointmentStatistics();
+
       // Get today's date in YYYY-MM-DD format
       const today = new Date().toISOString().split('T')[0];
 
-      // Get all appointments for this doctor
+      // Get upcoming appointments for the upcoming count
       const { appointments } = await appointmentsService.getAppointments({
-        doctorId: user!.id,
         limit: 1000
       });
 
       const dashboardStats: DashboardStats = {
-        totalAppointments: appointments.length,
-        todayAppointments: appointments.filter(apt => apt.date === today).length,
-        pendingAppointments: appointments.filter(apt => apt.status === 'PENDING').length,
-        completedAppointments: appointments.filter(apt => apt.status === 'COMPLETED').length,
+        totalAppointments: statistics.total,
+        todayAppointments: statistics.today,
+        pendingAppointments: statistics.pending,
+        completedAppointments: statistics.completed,
         upcomingAppointments: appointments.filter(apt =>
           (apt.status === 'PENDING' || apt.status === 'CONFIRMED') && apt.date >= today
         ).length,
