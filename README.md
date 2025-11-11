@@ -184,6 +184,50 @@ Sau khi chạy seed data, bạn có thể đăng nhập với các tài khoản 
 - Quản lý phòng khám
 - Báo cáo thống kê
 
+## Docker Deployment
+
+### Quick Start with Docker
+
+Run the entire application stack with Docker:
+
+```bash
+# Quick test
+chmod +x scripts/test-local.sh
+./scripts/test-local.sh
+```
+
+See [QUICKSTART.md](./QUICKSTART.md) for details.
+
+### Production Deployment
+
+For production deployment to AWS EC2 with GitHub Actions CI/CD:
+
+1. **Local Testing**: Follow [QUICKSTART.md](./QUICKSTART.md)
+2. **Production Setup**: Follow [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+Key features:
+- ✅ Docker containers for all services
+- ✅ Automated CI/CD with GitHub Actions
+- ✅ Nginx reverse proxy
+- ✅ SQL Server database with automated backups
+- ✅ Health checks and monitoring
+- ✅ SSL/HTTPS support ready
+
+### Available Scripts
+
+- `scripts/test-local.sh` - Test Docker setup locally
+- `scripts/setup-ec2.sh` - Setup EC2 instance for deployment
+- `scripts/deploy.sh` - Deploy application to EC2
+- `scripts/backup-database.sh` - Backup database
+- `scripts/restore-database.sh` - Restore database from backup
+
+### Docker Services
+
+- **Frontend**: React app served by Nginx (port 3000)
+- **Backend**: Node.js API (port 8080)
+- **Database**: SQL Server 2022 (port 1433)
+- **Nginx**: Reverse proxy (port 80/443)
+
 ## Phát triển tiếp
 
 Các tính năng sẽ được thêm trong tương lai:
@@ -193,6 +237,15 @@ Các tính năng sẽ được thêm trong tương lai:
 - Doctor scheduling management
 - Admin dashboard với statistics
 - Mobile responsive design improvements
+
+## Documentation
+
+- [QUICKSTART.md](./QUICKSTART.md) - Quick start guide for local development
+- [SEED_GUIDE.md](./SEED_GUIDE.md) - Database seeding guide
+- [TEST_CREDENTIALS.md](./TEST_CREDENTIALS.md) - Test account credentials
+- [DEPLOYMENT.md](./DEPLOYMENT.md) - Complete production deployment guide
+- [CORS_FIX.md](./CORS_FIX.md) - CORS configuration details
+- [Architecture Diagram](./DEPLOYMENT.md#architecture) - System architecture overview
 
 ## License
 

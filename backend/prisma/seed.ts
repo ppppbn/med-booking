@@ -1,8 +1,21 @@
 import { PrismaClient } from '@prisma/client';
-import { USER_ROLES, APPOINTMENT_STATUS } from '../src/constants/roles';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+
+// Constants (inlined to avoid import issues)
+const USER_ROLES = {
+  PATIENT: 'PATIENT',
+  DOCTOR: 'DOCTOR',
+  ADMIN: 'ADMIN'
+} as const;
+
+const APPOINTMENT_STATUS = {
+  PENDING: 'PENDING',
+  CONFIRMED: 'CONFIRMED',
+  CANCELLED: 'CANCELLED',
+  COMPLETED: 'COMPLETED'
+} as const;
 
 async function main() {
   console.log('🌱 Seeding database...');
