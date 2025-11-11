@@ -238,15 +238,6 @@ Các tính năng sẽ được thêm trong tương lai:
 - Admin dashboard với statistics
 - Mobile responsive design improvements
 
-## Documentation
-
-- [QUICKSTART.md](./QUICKSTART.md) - Quick start guide for local development
-- [SEED_GUIDE.md](./SEED_GUIDE.md) - Database seeding guide
-- [TEST_CREDENTIALS.md](./TEST_CREDENTIALS.md) - Test account credentials
-- [DEPLOYMENT.md](./DEPLOYMENT.md) - Complete production deployment guide
-- [CORS_FIX.md](./CORS_FIX.md) - CORS configuration details
-- [Architecture Diagram](./DEPLOYMENT.md#architecture) - System architecture overview
-
 ## License
 
 ISC
