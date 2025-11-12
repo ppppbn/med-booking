@@ -118,7 +118,7 @@ jobs:
             chmod +x scripts/deploy.sh
             
             # Export environment variables
-            export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            export GITHUB_TOKEN=${{ secrets.GHCR_TOKEN }}
             export GITHUB_ACTOR=${{ github.actor }}
             export JWT_SECRET="${{ secrets.JWT_SECRET }}"
             export JWT_EXPIRES_IN="${{ secrets.JWT_EXPIRES_IN }}"
